@@ -1,12 +1,27 @@
-# franchise-inventory-system — 프랜차이즈 재고·발주 관리 시스템
+<div align="center">
 
-> POS 매출을 자동 수집해 레시피대로 재료 재고를 차감하고, 본사–가맹점 발주·결제·납품·정산과 운영 리스크 알림을 한곳에서 관리한다.
+# franchise-inventory-system
+
+**프랜차이즈 재고·발주 관리 시스템**
+
+POS 매출을 자동 수집해 레시피대로 재료 재고를 차감하고, 본사–가맹점 발주·결제·납품·정산과 운영 리스크 알림을 한곳에서 관리한다.
 
 ![Node.js](https://img.shields.io/badge/Node.js-20-5FA04E?style=flat-square&logo=nodedotjs&logoColor=white) ![Express](https://img.shields.io/badge/Express-4-000000?style=flat-square&logo=express&logoColor=white) ![Knex](https://img.shields.io/badge/Knex-3-D26B38?style=flat-square) ![SQLite](https://img.shields.io/badge/SQLite-3-003B57?style=flat-square&logo=sqlite&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=flat-square&logo=postgresql&logoColor=white) ![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=white) ![Vite](https://img.shields.io/badge/Vite-5-646CFF?style=flat-square&logo=vite&logoColor=white) ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white) ![GitHub Actions](https://img.shields.io/badge/GitHub_Actions-CI-2088FF?style=flat-square&logo=githubactions&logoColor=white)
 
-- **문제**: POS 매출이 재고에 누락되거나 두 번 반영되면 화면은 멀쩡한 채 재고와 정산 수치가 조용히 틀어진다.
-- **해결**: 폴링과 웹훅이 반영 로직 하나를 공유하고, 조건부 UPDATE의 영향 행 수로 주문·환불의 소유권을 선점해 중복을 막으며, 시스템 실패는 리스크 알림으로 올린다.
-- **내 역할**: 1인 프로젝트로 설계·구현·테스트·배포를 전담했다.
+[핵심 기술 과제](#핵심-기술-과제와-해결) · [아키텍처](#아키텍처) · [실행 방법](#실행-방법) · [회고](#회고와-개선-과제)
+
+</div>
+
+| 기간 | 역할 | 규모 | 테스트 | 배포 |
+|:---:|:---:|:---:|:---:|:---:|
+| 2026.06 – 2026.09 | 1인 · 설계·구현·테스트·배포 전담 | 원본 커밋 229 · 리스크 알림 14종 | node:test 15파일 94케이스 · GitHub Actions CI | Render |
+
+> [!IMPORTANT]
+> **문제** — POS 매출이 재고에 누락되거나 두 번 반영되면 화면은 멀쩡한 채 재고와 정산 수치가 조용히 틀어진다.
+>
+> **해결** — 폴링과 웹훅이 반영 로직 하나를 공유하고, 조건부 UPDATE의 영향 행 수로 주문·환불의 소유권을 선점해 중복을 막으며, 시스템 실패는 리스크 알림으로 올린다.
+>
+> **내 역할** — 1인 프로젝트로 설계·구현·테스트·배포를 전담했다.
 
 ## 프로젝트 개요
 
@@ -153,6 +168,14 @@ flowchart TB
 
 ## 핵심 기술 과제와 해결
 
+| # | 과제 | 핵심 기법 |
+|:-:|---|---|
+| 1 | [폴링과 웹훅이 겹쳐도 매출을 한 번만 반영](#1-폴링과-웹훅이-겹쳐도-매출을-한-번만-반영) | `order_state` 조건부 UPDATE의 영향 행 수로 소유권 선점 · 선점과 이어지는 조회에 `store_id` 조건 · 취소 주문 재유입은 `SALES_REINGEST_BLOCKED` 리스크 |
+| 2 | [동기화 시간창과 매장 단위 락](#2-동기화-시간창과-매장-단위-락) | 최소 2일 창을 항상 다시 훑기 · 실패해도 `last_synced_at`은 `now - 2일`까지만 전진 · `stores.sync_locked_at` 조건부 UPDATE 락(TTL 30분) |
+| 3 | [환불 동시성](#3-환불-동시성) | 토스 호출 전에 `refunded_amount` 조건부 UPDATE로 선점 · 영향 행이 1이 아니면 409 거부 · 반영 실패 시 `REFUND_INCONSISTENT` 리스크 |
+| 4 | [SQLite·Postgres 이중 방언과 KST 경계](#4-sqlitepostgres-이중-방언과-kst-경계) | `dbTime.js`로만 시각 비교 · 방언별 SQL로 일별 매출 버킷을 KST로 절단 · SQLite 잡과 Postgres 잡을 따로 돌리는 CI |
+| 5 | [자격증명 AES-256-GCM 암호화와 자기 치유 백필](#5-자격증명-aes-256-gcm-암호화와-자기-치유-백필) | `enc:v1:` 접두사가 붙은 AES-256-GCM 암호문 · `isEncrypted`로 이중 암호화 방지 · 기동 시 `credentialsBackfill.js`가 남은 평문 암호화 |
+
 ### 1. 폴링과 웹훅이 겹쳐도 매출을 한 번만 반영
 
 - **문제**: 폴링이 같은 주문을 3분마다 다시 보고 웹훅도 같은 주문을 보내므로, 존재 확인 `SELECT`로 분기하면 Postgres에서 두 트랜잭션이 모두 "처음 보는 주문"으로 판단해 재고가 이중으로 차감될 수 있었다. `orders.toss_order_id`는 전역 UNIQUE라 다른 가맹점의 같은 주문 ID와 부딪힐 가능성도 있었다.
@@ -278,6 +301,9 @@ npm run dev             # http://localhost:5173
 - 로컬(`DATABASE_URL` 없음)에서는 `initDb()`가 데모 계정을 시드한다. 계정 정보는 코드 기본값(`server/src/db/schema.js`)을 따르며 README에는 적지 않는다.
 - 운영 설정을 점검하려면 `cd server && npm run preflight`를 쓴다. 읽기 전용 점검 스크립트다([server/scripts/preflight.js](server/scripts/preflight.js)).
 
+<details>
+<summary><b>환경 변수 표 펼치기</b></summary>
+
 | 환경변수(`server/.env.example`) | 용도 |
 |---|---|
 | `JWT_SECRET` | 로그인 토큰 서명 키. 필수이며 없으면 서버가 시작되지 않는다. |
@@ -288,6 +314,8 @@ npm run dev             # http://localhost:5173
 | `INITIAL_ADMIN_EMAIL`, `INITIAL_ADMIN_PASSWORD` | 최초 슈퍼 관리자 부트스트랩. 운영에서 비밀번호를 비우면 임의 값을 만들어 서버 로그에 한 번 출력한다. |
 | `CLIENT_URL` | 운영 CORS 허용 출처. 운영에서 비우면 프론트엔드 요청이 전부 차단된다. |
 | `DATABASE_URL`, `DATABASE_SSL` | 있으면 Postgres 운영 모드. SSL을 켜지 않은 Postgres는 `DATABASE_SSL=disable`을 쓴다. |
+
+</details>
 
 운영 배포는 Render Blueprint([render.yaml](render.yaml))로 서버(web), 클라이언트(static), Postgres 3개 서비스를 만든다. 서버의 `CLIENT_URL`은 대시보드에서 직접 입력해야 CORS가 열린다.
 
@@ -304,6 +332,9 @@ npm run test:serial     # 파일들이 하나의 DB를 공유할 때(직렬 실�
 - Postgres 모드는 CI의 `server-test-postgres` 잡과 같은 환경변수(`DATABASE_URL`, `DATABASE_SSL=disable`, `JWT_SECRET`, 테스트용 Postgres 허용 플래그)로 `npm run test:serial`을 돌린다. 허용 플래그가 없으면 즉시 throw해서, 셸에 남은 스테이징 `DATABASE_URL`로 실제 DB의 마이그레이션을 되돌리는 사고를 막는다.
 - CI는 push와 PR마다 [.github/workflows/ci.yml](.github/workflows/ci.yml)에서 SQLite 서버 테스트, Postgres 16 서버 테스트, 클라이언트 빌드를 각각 돌린다.
 
+<details>
+<summary><b>테스트 파일 매핑 펼치기</b></summary>
+
 | 범위 | 테스트 |
 |---|---|
 | 웹훅 서명 검증, 메뉴 매칭·자동 등록 | `webhook.test.js`, `webhook-menu-matching.test.js` |
@@ -317,9 +348,14 @@ npm run test:serial     # 파일들이 하나의 DB를 공유할 때(직렬 실�
 | KST 일별 집계, 마이그레이션 왕복 | `kst-bucketing.test.js`, `migrations.test.js` |
 | 자격증명 암호화, 백필 멱등성 | `crypto.test.js` |
 
+</details>
+
 테스트하지 않는 범위는 리스크 감지 크론(`checkPaymentOverdue`, `checkLowStock`), 발주서 CRUD(생성·임시저장·수정) 라우트 대부분, 클라이언트(`client/`)다. 클라이언트는 CI에서 빌드만 확인한다.
 
 ## 폴더 구조
+
+<details>
+<summary><b>폴더 트리 펼치기</b></summary>
 
 ```text
 franchise-inventory-system/
@@ -357,6 +393,8 @@ franchise-inventory-system/
 └─ 시작.bat                     # Windows 로컬 실행 스크립트
 ```
 
+</details>
+
 ### 관련 문서
 
 - [docs/architecture.md](docs/architecture.md): 도메인 규칙, 함정과 주의사항, 코드 컨벤션, 알려진 미완 항목
@@ -373,3 +411,11 @@ franchise-inventory-system/
 - **테스트 공백이 있다.** 리스크 감지 크론과 클라이언트에는 테스트가 없다.
 - **SSE와 웹훅의 정리가 남았다.** SSE 스트림은 서버에 구현·테스트돼 있지만 클라이언트는 아직 구독하지 않는다. 웹훅은 실제 토스 연동으로 폴링이 검증될 때까지 남겨둔 상태이며, 확인되면 배선을 제거할 예정이다.
 - **배달앱 채널을 별도 연동으로 잘못 설계했다가 되돌렸다.** 배달앱 주문은 토스플레이스 동기화의 `order.source` 값(`channel`)으로 이미 내려오는데, 채널별 컬럼을 `stores`에 추가했다가 되돌렸다. 이 경험에서 `toss_` 접두사 혼란과 `stores` 테이블 비대화 같은 확장성 문제를 정리한 것이 `server/docs/db-schema-review.md`다(1번 항목).
+
+---
+
+<div align="center">
+
+[다른 프로젝트 보기](https://github.com/pyobonboy) · [pyobon07@naver.com](mailto:pyobon07@naver.com)
+
+</div>
