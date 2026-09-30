@@ -1,0 +1,67 @@
+services:
+  - type: web
+    name: inventory-alert-server
+    runtime: node
+    rootDir: server
+    buildCommand: npm ci
+    startCommand: npm start
+    # 등록하지 않으면 서버가 만들어둔 /health를 플랫폼이 호출하지 않아, DB가 끊겨도
+    # 프로세스만 살아있으면 계속 트래픽을 받는다 (server/src/index.js의 /health 참고)
+    healthCheckPath: /health
+    # 크론(setInterval)·로그인 잠금·rate limit이 전부 프로세스 메모리 기반이라 인스턴스를 늘리면
+    # 중복 실행된다(같은 크론이 인스턴스마다 따로 돌고, 로그인 잠금/레이트리밋 카운트가 인스턴스마다 갈라짐).
+    numInstances: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 20
+      - key: DATABASE_URL
+        fromDatabase:
+          name: inventory-db
+          property: connectionString
+      - key: JWT_SECRET
+        generateValue: true
+      - key: TOSS_WEBHOOK_SECRET
+        sync: false
+      - key: TOSS_SECRET_KEY
+        sync: false
+      - key: TOSS_PLACE_ACCESS_KEY
+        sync: false
+      - key: TOSS_PLACE_SECRET_KEY
+        sync: false
+      # hex 64자여야 한다(`crypto.randomBytes(32).toString('hex')`). generateValue: true는 형식이
+      # 맞지 않아 쓸 수 없다. 미설정 시 토스 자격증명이 평문으로 저장된다.
+      - key: CREDENTIALS_KEY
+        sync: false
+      - key: TZ
+        value: Asia/Seoul
+      # 프론트엔드 배포 URL을 스킴 포함 전체 주소로 입력할 것 (예: https://<프론트엔드-호스트>).
+      # 미설정 시 프론트엔드 요청이 전부 CORS 차단됨
+      - key: CLIENT_URL
+        sync: false
+
+  - type: web
+    name: inventory-alert-client
+    runtime: static
+    rootDir: client
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+    envVars:
+      - key: NODE_VERSION
+        value: 20
+      - key: VITE_API_URL
+        fromService:
+          name: inventory-alert-server
+          type: web
+          property: host
+      - key: VITE_TOSS_CLIENT_KEY
+        sync: false
+
+databases:
+  - name: inventory-db
+    plan: free

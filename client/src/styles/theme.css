@@ -1,0 +1,138 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* ── 라이트 테마 (기본) ─────────────────────────────── */
+:root {
+  --bg:          #fafbff;
+  --bg-card:     #ffffff;
+  --bg-elevated: #f0f4ff;
+  --bg-input:    #ffffff;
+  --bg-muted:    #f5f8ff;
+  --text:        #1a1a2e;
+  --text-2:      #4b5563;
+  --text-3:      #6b7280;
+  --border:      #dde3f0;
+  --border-input:#c9d3e8;
+  --shadow:      0 2px 8px rgba(15,23,42,0.05), 0 1px 2px rgba(15,23,42,0.04);
+  --purple:      #0064ff;
+  --purple-dark: #0050cc;
+  --purple-light:#e8f1ff;
+
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+
+  --color-danger:        #dc2626;
+  --color-danger-bg:     #fee2e2;
+  --color-danger-dark:   #b91c1c;
+  --color-warning:       #f59e0b;
+  --color-warning-bg:    #fef3c7;
+  --color-warning-dark:  #92400e;
+  --color-success:       #16a34a;
+  --color-success-bg:    #dcfce7;
+  --color-info:          #3b82f6;
+  --color-info-bg:       #eff6ff;
+}
+
+/* ── 다크 테마 ──────────────────────────────────────── */
+[data-theme="dark"] {
+  --bg:          #0f172a;
+  --bg-card:     #1e293b;
+  --bg-elevated: #0f172a;
+  --bg-input:    #0f172a;
+  --bg-muted:    #1a2744;
+  --text:        #f1f5f9;
+  --text-2:      #e2e8f0;
+  --text-3:      #a8b4c8;
+  --border:      #334155;
+  --border-input:#475569;
+  --shadow:      0 1px 3px rgba(0,0,0,0.4);
+  --purple:      #3182f6;
+  --purple-dark: #1b64da;
+  --purple-light:#102a4c;
+}
+
+:root {
+  --kicc-red: #0064ff;
+  --kicc-red-dark: #0050cc;
+}
+
+/* 그림자 톤을 3단계로 추출 — 기존 --shadow 값은 그대로 두고 옵션만 추가 */
+:root {
+  --shadow-sm: 0 1px 2px rgba(15,23,42,0.04), 0 1px 1px rgba(15,23,42,0.03);
+  --shadow-md: 0 8px 24px rgba(15,23,42,0.10), 0 2px 6px rgba(15,23,42,0.05);
+  --shadow-lg: 0 16px 40px rgba(15,23,42,0.14), 0 4px 12px rgba(15,23,42,0.06);
+}
+[data-theme="dark"] {
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.32);
+  --shadow-lg: 0 16px 40px rgba(0,0,0,0.4);
+}
+
+@theme inline {
+  /* 색 — 유틸리티 이름 -> 원본 변수 */
+  --color-bg:          var(--bg);
+  --color-card:        var(--bg-card);
+  --color-elevated:    var(--bg-elevated);
+  --color-inputbg:     var(--bg-input);
+  --color-muted:       var(--bg-muted);
+  --color-fg:          var(--text);
+  --color-fg-2:        var(--text-2);
+  --color-fg-3:        var(--text-3);
+  --color-line:        var(--border);
+  --color-line-input:  var(--border-input);
+  --color-brand:       var(--purple);
+  --color-brand-dark:  var(--purple-dark);
+  --color-brand-light: var(--purple-light);
+
+  /* 위험/경고/성공/정보 톤 — 원본 --color-danger 등은 src/pages/Analytics.jsx 안에서
+     인라인 style 값으로 문자열 그대로 참조하고 있어(var(--color-danger) 등) 원본 이름을
+     바꿀 수 없다. 그래서 Tailwind 유틸리티 쪽 alias 이름을 다르게 잡아 자기참조 순환을 피한다. */
+  --color-alert:        var(--color-danger);
+  --color-alert-bg:     var(--color-danger-bg);
+  --color-alert-dark:   var(--color-danger-dark);
+  --color-caution:      var(--color-warning);
+  --color-caution-bg:   var(--color-warning-bg);
+  --color-caution-dark: var(--color-warning-dark);
+  --color-positive:     var(--color-success);
+  --color-positive-bg:  var(--color-success-bg);
+  --color-note:         var(--color-info);
+  --color-note-bg:      var(--color-info-bg);
+
+  /* 반경 */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  /* 폰트 크기 — 현재 코드에서 실제로 쓰이는 px 값 기준. body는 19.5px 유지 */
+  --text-2xs:  11px;
+  --text-xs:   13px;
+  --text-sm:   15px;
+  --text-md:   17px;
+  --text-base: 19px;
+  --text-lg:   21px;
+  --text-xl:   24px;
+  --text-2xl:  27px;
+  --text-3xl:  33px;
+
+  /* Tailwind는 text-* 유틸리티에 font-size와 함께 짝이 되는 line-height도 같이 내보낸다.
+     text-xs/sm/base/lg/xl/2xl 은 Tailwind 기본 키와 이름이 겹쳐서 기본 행간(1.5, 1.33 …)이
+     딸려 나오는데, 원본 CSS는 이 요소들에 line-height 규칙이 없어서 body의 1.6을 상속받고 있었다.
+     그대로 두면 전 화면 행간이 미세하게 달라지므로 inherit으로 눌러서 원래 상속 동작을 그대로 살린다. */
+  --text-2xs--line-height:  inherit;
+  --text-xs--line-height:   inherit;
+  --text-sm--line-height:   inherit;
+  --text-md--line-height:   inherit;
+  --text-base--line-height: inherit;
+  --text-lg--line-height:   inherit;
+  --text-xl--line-height:   inherit;
+  --text-2xl--line-height:  inherit;
+  --text-3xl--line-height:  inherit;
+}
